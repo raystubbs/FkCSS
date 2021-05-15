@@ -6,7 +6,6 @@ Powerful styling without leaving Clojure/ClojureScript - f**k CSS.
 ```clj
 (ns example.view
   (:require
-    [example.colors :as colors]
     [fkcss.core :as ss]))
 
 (def button-class
