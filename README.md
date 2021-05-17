@@ -20,7 +20,7 @@ Powerful styling without leaving Clojure/ClojureScript - f**k CSS.
      :screen-small?
      {:font-size "16pt"}
      
-     :>before
+     :#before
      {:content "\"\""
       :position "absolute"
       :left 0
