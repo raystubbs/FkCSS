@@ -1,20 +1,24 @@
 (ns fkcss.core
   (:require
-   [clojure.string :as str]
-   [clojure.set :as set]))
+    [clojure.string :as str]))
 
-(def ^:private MEDIA-QUERY-PREDICATE->CONDITION
-  {:screen-tiny? "(max-width: 639px)"
-   :screen-small? "(min-width: 640px) and (max-width: 767px)"
-   :screen-medium? "(min-width: 768px) and (max-width: 1023px)"
-   :screen-large? "(min-width: 1024px) and (max-width: 1279px)"
-   :screen-huge? "(min-width: 1280px)"
-   :pointer-fine? "(pointer: fine)"
-   :pointer-coarse? "(pointer: coarse)"
-   :pointer-none? "(pointer: none)"
-   :pointer-hoverable? "(hover: hover)"})
+(declare ^:private ^:dynamic *config*)
 
-(def ^:private PSEUDO-CLASS-PREDICATE->PSEUDO-CLASS
+(defn- panic [& msg]
+  (throw (#?(:clj IllegalArgumentException. :cljs js/Error.) (str/join msg))))
+
+(def DEFAULT-QUERY-TESTS
+  {:screen-tiny? "@media (max-width: 639px)"
+   :screen-small? "@media (max-width: 767px)"
+   :screen-medium? "@media (min-width: 768px) and (max-width: 1023px)"
+   :screen-large? "@media (min-width: 1024px)"
+   :screen-huge? "@media (min-width: 1280px)"
+   :pointer-fine? "@media (pointer: fine)"
+   :pointer-coarse? "@media (pointer: coarse)"
+   :pointer-none? "@media (pointer: none)"
+   :pointer-hoverable? "@media (hover: hover)"})
+
+(def DEFAULT-SELECTOR-TESTS
   {:hovered? ":hover"
    :active? ":active"
    :focused? ":focus"
@@ -26,70 +30,8 @@
    :expanded? "[aria-expanded=\"true\"]"
    :current? "[aria-current]"})
 
-(def ^:private MEDIA-QUERY-PREDICATES
-  (set (keys MEDIA-QUERY-PREDICATE->CONDITION)))
-
-(def ^:private PSEUDO-CLASS-PREDICATES
-  (set (keys PSEUDO-CLASS-PREDICATE->PSEUDO-CLASS)))
-
-(def ^:private PREDICATE-PROPS
-  (set/union
-   MEDIA-QUERY-PREDICATES
-   PSEUDO-CLASS-PREDICATES))
-
-(def ^:const INIT-CONTEXT {:class-defs {} :font-imports {} :css-imports #{}})
-(def ^:dynamic *context* (atom INIT-CONTEXT))
-(def ^:dynamic ^:private *opts* {})
-
-(defn- panic [& msg]
-  (throw (#?(:clj RuntimeException. :cljs js/Error.) (str/join msg))))
-
-(defn reg-class* [name style]
-  (let [class-name (clojure.core/name (if (-> name meta :exact) name (gensym name)))
-        order (or (get-in @*context* [:class-defs name :order]) (-> @*context* :class-defs count))]
-    (swap! *context* assoc-in [:class-defs name] {:style style :order order :class class-name})
-    class-name))
-
-(defmacro defclass [name style]
-  {:pre [(symbol? name) (map? style)]}
-  `(def ~name (reg-class* '~name ~style)))
-
-(defn import-font [name url]
-  (swap! *context* assoc-in [:font-imports name] url))
-
-(defn import-css [url]
-  (swap! *context* update :css-imports conj url))
-
-(defn- media-query-vector? [v]
-  (and
-   (vector? v)
-   (= :media (nth v 0))
-   (or
-    (string? (nth v 1))
-    (panic "invalid media query vector: " v))))
-
-(defn- extract-predicate-styles [style]
-  (reduce-kv
-   (fn [[r p] k v]
-     (cond
-       (or (contains? PREDICATE-PROPS k) (string? k) (media-query-vector? k))
-       [r
-        (let [[root-style predicate-set->style] (extract-predicate-styles v)]
-          (->
-           (reduce-kv
-            (fn [p predicate-set predicate-style]
-              (update p (conj predicate-set k) merge predicate-style))
-            p
-            predicate-set->style)
-           (assoc #{k} root-style)))]
-
-       :else
-       [(assoc r k v) p]))
-   [{} {}]
-   style))
-
-
 ; See: http://shouldiprefix.com/
+; I imagine there are things missing from here
 (defn- with-vendor-translations [[k v]]
   (case k
     "background-clip"
@@ -183,9 +125,6 @@
 
 (defn- clj->css [v]
   (cond
-    (map? v)
-    nil
-
     (string? v)
     v
 
@@ -205,249 +144,229 @@
       (str/join " " (map clj->css v)))
 
     (fn? v)
-    (let [r (v (:theme *opts*))]
+    (let [r (v (:theme *config*))]
       (if (fn? r)
         (panic "style generator function returns another function, that's not allowed")
         (clj->css r)))))
 
-(defn- style->css-props [style]
+(defn- clj-props->css-props [clj-props]
   (mapcat
-   (fn [[k v]]
-     (let [maybe-css-val (clj->css v)]
-       (cond
-         (some? maybe-css-val)
-         [[(name k) maybe-css-val]]
-
-         (map? v)
-         (map
+    (fn [[k v]]
+      (cond
+        (map? v)
+        (mapcat
           (fn [[inner-css-k inner-css-v]]
-            [(str (name k) "-" inner-css-k) inner-css-v])
-          (style->css-props v))
+            (with-vendor-translations
+              [(str (name k) "-" inner-css-k) inner-css-v]))
+          (clj-props->css-props v))
 
-         :else
-         (panic "invalid value for " k ":" (prn-str v)))))
-   style))
+        (nil? v)
+        nil
 
-(defn pseudo-el-key? [k]
-  (and
-    (keyword? k)
-    (str/starts-with? (name k) "#")))
+        :else
+        (with-vendor-translations
+          [(name k) (clj->css v)])))
+    clj-props))
 
-(defn child-el-key? [k]
-  (and
-    (keyword? k)
-    (str/starts-with? (name k) ">")))
+(defn- path->selector [path]
+  (loop [remaining-path path
+         selector-parts []]
+    (if (empty? remaining-path)
+      (str/join selector-parts)
+      (let [[node-key & remaining-path] remaining-path
 
-(defn- gen-animation-frames [name animation-frames]
-  (let [keyframe-indent "  "
-        inner-indent "    "]
-    (str "@keyframes " name " {\n"
-      (->>
-       (map
-         (fn [[time style]]
-           (str keyframe-indent (clojure.core/name time) " {\n"
-             (->> style
-                  style->css-props
-                  (mapcat with-vendor-translations)
-                  (map #(str inner-indent (nth % 0) ": " (nth % 1) ";\n"))
-                  (str/join))
-             keyframe-indent "}\n"))
-         animation-frames)
-       (str/join "\n"))
-      "}\n")))
+            [test-keys remaining-path]
+            (split-with #(= "test" (namespace %)) remaining-path)
 
-(defn- gen-predicate-set-rules [selector predicate-set style]
-  (let [{mq-predicates :media-query
-         pc-predicates :pseudo-class
-         mqv-predicates :media-query-vector
-         raw-predicates :raw}
+            _
+            (when (and (seq test-keys) (= (:parse-context *config*) :animation-frame))
+              (panic "can't have tests in animation-frames, found `" test-keys "`"))
+
+            base-selector
+            (when node-key
+              (case (namespace node-key)
+                "class"
+                (str " ." (name node-key))
+
+                "root"
+                (str "." (name node-key))
+
+                "pseudo"
+                (str "::" (name node-key))
+
+                "tag"
+                (str " " (name node-key))))
+
+            {:keys [query-tests selector-tests]} *config*
+
+
+            test-selectors
+            (reduce
+              (fn [m test-key]
+                (let [k (-> test-key name keyword)
+                      test-selector (get selector-tests k)]
+                  (cond
+                    (contains? query-tests k)
+                    m
+
+                    (some? test-selector)
+                    (conj m test-selector)
+
+                    :else
+                    (panic "unknown test `" test-key "`"))))
+              []
+              test-keys)]
+        (recur
+          remaining-path
+          (-> selector-parts
+            (cond->
+              base-selector
+              (conj base-selector))
+            (into test-selectors)))))))
+
+(defn- wrap-with-query-tests [path indent body-fn]
+  (let [{:keys [query-tests]} *config*
+        indent-str (str/join (repeat indent "  "))
+
+        remaining-path
+        (drop-while
+          (fn [path-key]
+            (let [k (-> path-key name keyword)]
+              (not (and (= "test" (namespace path-key)) (contains? query-tests k)))))
+          path)
+
+        [query-test-key & remaining-path] remaining-path]
+    (cond
+      (nil? query-test-key)
+      (body-fn indent-str)
+
+      :else
+      (str
+        indent-str (get query-tests (-> query-test-key name keyword)) " {\n"
+        (wrap-with-query-tests remaining-path (inc indent) body-fn)
+        indent-str "}\n"))))
+
+(defn- clj-time-offset->css-time-offset [time-offset]
+  (cond
+    (number? time-offset)
+    (cond
+      (<= 0 time-offset 1)
+      (str (int (* 100 time-offset)) "%")
+
+      :else
+      (panic "numeric time offsets must be between 0-1, found `" time-offset "`"))
+
+    (or (string? time-offset) (keyword? time-offset))
+    (name time-offset)
+
+    :else
+    (panic "can't understand time offset `" time-offset "`")))
+
+(defn- style->css [path style]
+  (let [; special handling for `animation-frames: ...` and `animation: {:frames ...}`,
+        ; it gets translated into a @keyframe form and its name replaces `animation-name`.
+        animation-frames (or (:animation-frames style) (-> style :animation :frames))
+        animation-name (when animation-frames (gensym "fkcss-animation-"))
+
+        style
+        (cond-> style
+          animation-name
+          (->
+            (dissoc :animation-frames)
+            (update :animation assoc :name animation-name :frames nil)))
+
+        {props :prop children :node}
         (group-by
-          (fn [predicate]
-            (cond
-              (contains? MEDIA-QUERY-PREDICATES predicate)
-              :media-query
-
-              (contains? PSEUDO-CLASS-PREDICATES predicate)
-              :pseudo-class
-
-              (media-query-vector? predicate)
-              :media-query-vector
-
-              :else
-              :raw))
-          predicate-set)
-
-        selector-indent (when (seq mq-predicates) "  ")
-        inner-indent (if (seq mq-predicates) "    " "  ")
-
-        base-selector
-        (str
-          selector-indent
-          (when-let [selector (:selector *opts*)]
-            (str selector " "))
-          selector
-          (str/join
-            (concat
-              (map PSEUDO-CLASS-PREDICATE->PSEUDO-CLASS pc-predicates)
-              raw-predicates)))
-
-        style->css
-        (fn [style sub-selector]
-          (let [animation-name (str (gensym "fkcss-animation-"))
-                
-                [animation-frames style]
-                (or
-                  (when-let [frames (:animation-frames style)]
-                    [frames
-                     (-> style
-                         (dissoc :animation-frames :animation-name)
-                         (assoc-in [:animation :name] animation-name))])
-                  (when-let [frames (some-> style :animation :frames)]
-                    [frames
-                     (-> style
-                         (update :animation dissoc :frames)
-                         (dissoc :animation-name)
-                         (assoc-in [:animation :name] animation-name))])
-                  [nil style])]
-            (str
-              base-selector sub-selector
-
-              " {\n"
-
-              (->> style
-                   (filter (comp not (some-fn child-el-key? pseudo-el-key?) key))
-                   style->css-props
-                   (mapcat with-vendor-translations)
-                   (map #(str inner-indent (nth % 0) ": " (nth % 1) ";\n"))
-                   (str/join))
-
-              selector-indent "}\n"
-              
-              (when animation-frames
-                (gen-animation-frames animation-name animation-frames)))))
-
-        pseudo-el-styles
-        (keep
-          (fn [[k :as kv]]
-            (when (pseudo-el-key? k)
-              kv))
+          (fn [[k v]]
+            (if (and (keyword? k) (nil? (namespace k)))
+              :prop
+              :node))
           style)
-        
-        child-el-styles
-        (keep
-          (fn [[k :as kv]]
-            (when (child-el-key? k)
-              kv))
-          style)]
+
+        selector (path->selector path)]
     (str
-     (when (seq mq-predicates)
-       (str
-        "@media "
-        (str/join
-         " and "
-         (concat
-          (map MEDIA-QUERY-PREDICATE->CONDITION mq-predicates)
-          (map second mqv-predicates)))
-        " {\n"))
+      (wrap-with-query-tests path 0
+        (fn [indent-str]
+          (str
 
-     (style->css style nil)
-     (str/join
-      (map
-       (fn [[k v]]
-         (let [k-str (name k)]
-           (style->css v (str "::" (subs k-str 1)))))
-       pseudo-el-styles))
-     (str/join
-       (map
-         (fn [[k v]]
-           (let [k-str (name k)]
-             (style->css v (str " " (subs k-str 1)))))
-         child-el-styles))
+            (when (seq props)
+              (str
+                indent-str selector " {\n"
 
+                (->> props
+                  clj-props->css-props
+                  (map #(str indent-str "  " (nth % 0) ": " (nth % 1) ";\n"))
+                  str/join)
 
-     (when (seq mq-predicates)
-       "}"))))
+                indent-str "}\n"))
 
-(defn- gen-selector-rules [selector style]
-  (let [[root-style predicate-set->style] (extract-predicate-styles style)]
-    (str/join
-     "\n"
-     (map
-      (partial apply gen-predicate-set-rules selector)
-      (cons
-       [#{} root-style]
-       predicate-set->style)))))
+            (when animation-name
+              (binding [*config* (assoc *config* :parse-context :animation-frame)]
+                (str
+                  indent-str "@keyframes " animation-name " {\n"
+                  (->> animation-frames
+                    (map
+                      (fn [[time-offset style]]
+                        (str
+                          indent-str "  " (clj-time-offset->css-time-offset time-offset) " {\n"
+                          (->> style
+                            clj-props->css-props
+                            (map #(str indent-str "    " (nth % 0) ": " (nth % 1) ";\n"))
+                            str/join)
+                          indent-str "  }\n")))
+                    str/join)
+                  indent-str "}\n"))))))
+      (->> children
+        (map
+          (fn [[k v]]
+            (style->css (if (vector? k) (into path k) (conj path k)) v)))
+        str/join))))
+
+(defn new-context []
+  (atom {:class-reg {} :css-imports []}))
+
+(defonce ^:dynamic *context* (new-context))
+
+(defn reg-class
+  ([class-name style]
+    (reg-class class-name class-name style))
+  ([key class-name style]
+    (swap! *context* assoc-in [:class-reg key] {:class class-name :style style})
+    class-name))
+
+(defmacro defclass [name style]
+  {:pre [(symbol? name) (map? style)]}
+  (let [class-name (if (-> name meta :exact) (clojure.core/name name) (str (gensym (str name "-"))))]
+    `(def ~name (reg-class '~name ~class-name ~style))))
+
+(defn import-css [url]
+  (swap! *context* update :css-imports conj url))
 
 (defn gen-css
-  ([] (gen-css nil))
-  ([opts]
-   (binding [*opts* opts]
-     (str
-       (->> @*context*
-            :css-imports
-            (map
-              (fn [url]
-                (str "@import \"" url "\";\n")))
-            str/join)
-       (->> @*context*
-            :font-imports
-            (map
-              (fn [[name url]]
-                (str
-                  "@font-face {\n"
-                  "  font-family: \"" name "\";\n"
-                  "  src: url(\"" url "\");\n"
-                  "}\n")))
-            str/join)
-       (->> @*context*
-            :class-defs
-            vals
-            (sort-by :order)
-            (map #(gen-selector-rules (str "." (:class %)) (:style %)))
-            str/join)
-       (->> opts
-            :global-styles
-            (map #(gen-selector-rules (key %) (val %)))
-            str/join)))))
+  ([]
+    (gen-css {}))
+  ([config]
+    (binding [*config*
+              (-> {:selector-tests DEFAULT-SELECTOR-TESTS :query-tests DEFAULT-QUERY-TESTS}
+                (merge config)
+                (assoc :parse-context :root))]
+      (->> @*context*
+        :css-imports
+        (map
+          (fn [url]
+            (str "@import \"" url "\";\n")))
+        str/join)
+      (->> @*context*
+        :class-reg
+        vals
+        (map
+          (fn [{:keys [class style]}]
+            (style->css [(keyword "root" class)] style)))
+        str/join))))
 
-(defn rgb [r g b]
-  (str "rgb(" r ", " g ", " b ")"))
-
-(defn rgba [r g b a]
-  (str "rgba(" r ", " g ", " b ", " a ")"))
-
-(defn hsl [h s l]
-  (str "hsl(" h ", " s ", " l ")"))
-
-(defn hsla [h s l a]
-  (str "hsla(" h ", " s ", " l ", " a ")"))
-
-(defn url [s]
-  (str "url(" s ")"))
-
-(defn calc [& ss]
-  (str "calc(" (str/join " " ss) ")"))
-
-;; test
-;;(def example-class
-;;  (class-for
-;;   {:color "white"
-;;    :border {:color "black" :width "1px" :style :solid}
-;;    :font-size "12pt"
-;;
-;;    :hovered?
-;;    {:background {:color "blue"}}
-;;
-;;    :screen-small?
-;;    {:font-size "16pt"}
-;;
-;;    :>before
-;;    {:content "\"\""
-;;     :position "absolute"
-;;     :left 0
-;;     :top 0
-;;     :bottom 0
-;;     :right 0
-;;     :background {:color (rgb 25 25 25)}}}))
-;;
-;;(print (gen-css {:selector "[data-theme=\"dark\"]"}))
+(defn format [fmt args]
+  (str/replace fmt #"\{((?:[^}]|\\\})+)\}"
+    (fn [[_ key]]
+      (if (= "\\}" key)
+        "}"
+        (or (get args (keyword key)) (get args key))))))
