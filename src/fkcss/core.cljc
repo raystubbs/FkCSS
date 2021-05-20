@@ -8,15 +8,14 @@
   (throw (#?(:clj IllegalArgumentException. :cljs js/Error.) (str/join msg))))
 
 (def DEFAULT-QUERY-TESTS
-  {:screen-tiny? "@media (max-width: 639px)"
-   :screen-small? "@media (max-width: 767px)"
-   :screen-medium? "@media (min-width: 768px) and (max-width: 1023px)"
-   :screen-large? "@media (min-width: 1024px)"
-   :screen-huge? "@media (min-width: 1280px)"
-   :pointer-fine? "@media (pointer: fine)"
-   :pointer-coarse? "@media (pointer: coarse)"
-   :pointer-none? "@media (pointer: none)"
-   :pointer-hoverable? "@media (hover: hover)"})
+  {:screen-tiny? {:query "@media (max-width: 639px)" :priority 1}
+   :screen-small? {:query "@media (max-width: 767px)" :priority 2}
+   :screen-large? {:query "@media (min-width: 1024px)" :priority 2}
+   :screen-huge? {:query "@media (min-width: 1280px)" :priority 1}
+   :pointer-fine? {:query "@media (pointer: fine)"}
+   :pointer-coarse? {:query "@media (pointer: coarse)"}
+   :pointer-none? {:query "@media (pointer: none)"}
+   :pointer-hoverable? {:query "@media (hover: hover)"}})
 
 (def DEFAULT-SELECTOR-TESTS
   {:hovered? ":hover"
@@ -242,7 +241,7 @@
 
       :else
       (str
-        indent-str (get query-tests (-> query-test-key name keyword)) " {\n"
+        indent-str (get-in query-tests [(-> query-test-key name keyword) :query]) " {\n"
         (wrap-with-query-tests remaining-path (inc indent) body-fn)
         indent-str "}\n"))))
 
@@ -317,31 +316,59 @@
                     str/join)
                   indent-str "}\n"))))))
       (->> children
+        (sort-by
+          (fn [[k v]]
+            (when (= "test" (namespace k))
+              (get-in *config* [:query-tests (-> k name keyword) :priority]))))
         (map
           (fn [[k v]]
             (style->css (if (vector? k) (into path k) (conj path k)) v)))
         str/join))))
 
 (defn new-context []
-  (atom {:class-reg {} :css-imports []}))
+  (atom {:class-reg {} :css-imports {} :css-includes {} :next-index 0}))
 
 (defonce ^:dynamic *context* (new-context))
+
+(defn- take-index []
+  (let [index (:next-index @*context*)]
+    (swap! *context* update :next-index inc)
+    index))
 
 (defn reg-class
   ([class-name style]
     (reg-class class-name class-name style))
   ([key class-name style]
-    (swap! *context* assoc-in [:class-reg key] {:class class-name :style style})
+    (if (-> @*context* :class-reg (contains? key))
+      (swap! *context* update-in [:class-reg key] merge {:class-name class-name :style style})
+      (swap! *context* assoc-in [:class-reg key] {:class class-name :style style :index (take-index)}))
     class-name))
+
+(defn defclass* [name style exact?]
+  (let [class-name
+        (if exact?
+          (clojure.core/name name)
+          (or
+            (get-in @*context* [:class-reg name :class])
+            (str (gensym (str name "-")))))]
+    (reg-class name class-name style)))
 
 (defmacro defclass [name style]
   {:pre [(symbol? name) (map? style)]}
-  (let [class-name (if (-> name meta :exact) (clojure.core/name name) (str (gensym (str name "-"))))]
-    `(def ~name (reg-class '~name ~class-name ~style))))
+  `(def ~name (defclass* '~name ~style ~(-> name meta :exact))))
 
-(defn import-css [url]
-  (swap! *context* update :css-imports conj url))
+(defn import-css [key url]
+  (if (-> @*context* :css-imports (contains? key))
+    (swap! *context* update-in [:css-imports key] merge {:url url})
+    (swap! *context* assoc-in [:css-imports key] {:url url :index (take-index)}))
+  nil)
 
+(defn include-css [key css]
+  (if (-> @*context* :css-includes (contains? key))
+    (swap! *context* update-in [:css-includes key] merge {:css css})
+    (swap! *context* assoc-in [:css-includes key] {:css css :index (take-index)}))
+  nil)
+ 
 (defn gen-css
   ([]
     (gen-css {}))
@@ -350,18 +377,28 @@
               (-> {:selector-tests DEFAULT-SELECTOR-TESTS :query-tests DEFAULT-QUERY-TESTS}
                 (merge config)
                 (assoc :parse-context :root))]
-      (->> @*context*
-        :css-imports
-        (map
-          (fn [url]
-            (str "@import \"" url "\";\n")))
-        str/join)
-      (->> @*context*
-        :class-reg
-        vals
-        (map
-          (fn [{:keys [class style]}]
-            (style->css [(keyword "root" class)] style)))
+      (->>
+        (concat
+          (->> @*context*
+            :css-imports
+            vals
+            (map
+              (fn [{:keys [url index]}]
+                [index (str "@import \"" url "\";\n")])))
+          (->> @*context*
+            :class-reg
+            vals
+            (map
+              (fn [{:keys [class style index]}]
+                [index (style->css [(keyword "root" class)] style)])))
+          (->> @*context*
+            :css-includes
+            vals
+            (map
+              (fn [{:keys [css index]}]
+                [index (str css "\n")]))))
+        (sort-by first)
+        (map second)
         str/join))))
 
 (defn format [fmt args]
