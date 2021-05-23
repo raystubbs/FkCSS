@@ -46,7 +46,7 @@ As an alternative to manually injecting the generated CSS, in ClojureScript you
 can do.
 ```clj
 (fkcss.cljs/mount!) ; add CSS to the DOM
-(fkcss.clj/unmount!) ; remove it when finished, unnecessary for most apps
+(fkcss.cljs/unmount!) ; remove it when finished, unnecessary for most apps
 ```
 
 ## Tests
