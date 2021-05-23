@@ -169,7 +169,7 @@
 
 (defn- path->selector [path]
   (loop [remaining-path path
-         selector-parts []]
+         selector-parts (cond-> [] (:root-selector *config*) (conj (str (:root-selector *config*) " ")))]
     (if (empty? remaining-path)
       (str/join selector-parts)
       (let [[node-key & remaining-path] remaining-path
