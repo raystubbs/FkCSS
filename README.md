@@ -1,3 +1,5 @@
+[![Clojars Project](https://img.shields.io/clojars/v/org.clojars.raystubbs/fkcss.svg)](https://clojars.org/org.clojars.raystubbs/fkcss)
+
 # FkCSS
 Powerful styling without leaving Clojure/ClojureScript - f**k CSS.
 
