@@ -125,9 +125,9 @@ More concisely, multiple levels of nesting can be expressed as a vector:
 ```
 
 ## Inline Animations
-FkCSS doesn't support for custom `@keyframe` animations, since we aren't trying
-to recreate CSS in Clojure, the idea is to build something better, more expressive
-than plain CSS.  So we have inline keyframes instead.
+FkCSS doesn't support custom `@keyframe` animations, since we aren't trying
+to recreate CSS in Clojure.  We wanna make something more concise and expressive,
+so FkCSS has inline animations.
 ```clj
 (defclass some-drawer-opening
  {:animation
@@ -154,15 +154,15 @@ later.
 
 ## Theming
 FkCSS provides two facilities to help with theming: the `:root-selector` config and
-functional styles.
+functional properties.
 
 The `root-selector` allows for an additional selector to be added
 at the start of each CSS rule, for example `[data-theme="dark"]`, which can then be
 added as an attribute to the document `body` (or another container) to make sure only
 things within the container are styled by the generated CSS.
 
-Functional styles are functions which take in a `them` (given via the
-`:theme` config) and produces a style map.
+Functional properties are functions appearing in the place of a property value,
+which take a `theme` (given via the `:theme` config) and produce a style map.
 
 Here's how these two features work together to allow for dynamic theming.
 ```clj
