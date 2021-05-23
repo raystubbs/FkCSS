@@ -1,1 +1,14 @@
-{:paths ["src"]}
+{:paths ["src"]
+ 
+ :aliases
+ {:test
+  {:extra-paths ["test"]
+   :exec-fn fkcss.tests/run-all}
+
+  :deploy
+  {:extra-deps {slipset/deps-deploy {:mvn/version "RELEASE"}}
+   :exec-fn deps-deploy.deps-deploy/deploy
+   :exec-args
+   {:installer :remote
+    :sign-releases? true
+    :artifact "deps-deploy.jar"}}}}
