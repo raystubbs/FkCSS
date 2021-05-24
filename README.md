@@ -197,7 +197,7 @@ Adding the `^:exact` metadata tag to any `defclass` will ensure that the CSS
 class produced has the same name as the def, so the following would produce a
 CSS class named `some-class`.
 ```clj
-(ss/defclass some-class
+(ss/defclass ^:exact some-class
   ...)
 ```
 
@@ -211,7 +211,8 @@ this is more verbose as FkCSS requires you to give the registration a key.
 ## Format Utility
 Any dynamic style generation is gonna rely on templating and other means of string
 generation quite heavily.  To make such code more expressive than it might be
-with `clojure.core/format`, FkCSS provides a name base templating utility `fkcss.core/format`,
+with `clojure.core/format`, FkCSS provides a name based templating utility `fkcss.core/format`,
 though it doesn't have any of the nice number formatting capabilities of the former.
 ```clj
 (ss/format "rgb({red}, {green}, {blue})" {:red 123 :green 123 :blue 123})
+```
