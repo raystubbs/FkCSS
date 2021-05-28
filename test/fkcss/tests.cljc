@@ -45,7 +45,7 @@
 (deftest test-query-tests
   (test-exact-style-gen
     {:test/screen-small? {:font-size "16pt"}}
-    "@media (max-width: 767px) { .test-class { font-size: 16pt; } }"))
+    "@media (max-width: 768px) { .test-class { font-size: 16pt; } }"))
 
 (deftest test-selector-tests
   (test-exact-style-gen
