@@ -8,10 +8,10 @@
   (throw (#?(:clj IllegalArgumentException. :cljs js/Error.) (str/join msg))))
 
 (def DEFAULT-QUERY-TESTS
-  {:screen-tiny? {:query "@media (max-width: 639px)" :priority 1}
-   :screen-small? {:query "@media (max-width: 767px)" :priority 2}
-   :screen-large? {:query "@media (min-width: 1024px)" :priority 2}
-   :screen-huge? {:query "@media (min-width: 1280px)" :priority 1}
+  {:screen-tiny? {:query "@media (max-width: 480px)" :priority 1}
+   :screen-small? {:query "@media (max-width: 768px)" :priority 2}
+   :screen-large? {:query "@media (min-width: 1025px)" :priority 2}
+   :screen-huge? {:query "@media (min-width: 1200px)" :priority 1}
    :pointer-fine? {:query "@media (pointer: fine)"}
    :pointer-coarse? {:query "@media (pointer: coarse)"}
    :pointer-none? {:query "@media (pointer: none)"}
