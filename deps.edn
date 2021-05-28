@@ -8,7 +8,7 @@
   :build
   {:replace-deps {com.github.seancorfield/depstar {:mvn/version "2.0.216"}}
    :exec-fn      hf.depstar/jar
-   :exec-args    {:jar "fkcss.jar" :aot true}}
+   :exec-args    {:jar "fkcss.jar"}}
 
   :deploy
   {:extra-deps {slipset/deps-deploy {:mvn/version "RELEASE"}}
