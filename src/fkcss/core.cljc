@@ -345,13 +345,15 @@
     class-name))
 
 (defn defclass* [name style exact?]
-  (let [class-name
+  (let [qualified-name (symbol (str *ns*) (clojure.core/name name))
+        
+        class-name
         (if exact?
           (clojure.core/name name)
           (or
-            (get-in @*context* [:class-reg name :class])
-            (str (gensym (str name "-")))))]
-    (reg-class name class-name style)))
+            (get-in @*context* [:class-reg qualified-name :class])
+            (str/replace (str qualified-name) #"[^A-Za-z0-9_]+" "-")))]
+    (reg-class qualified-name class-name style)))
 
 (defmacro defclass [name style]
   {:pre [(symbol? name) (map? style)]}
