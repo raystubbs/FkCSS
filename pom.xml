@@ -4,7 +4,7 @@
   <packaging>jar</packaging>
   <groupId>io.fkcss</groupId>
   <artifactId>fkcss</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <name>fkcss</name>
   <description>Web styling in Clojure.</description>
   <url>https://github.com/raystubbs/FkCSS</url>
