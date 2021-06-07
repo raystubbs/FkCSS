@@ -4,11 +4,15 @@
 
 (defonce ^:private MOUNTED-STYLES (atom {}))
 
+(defn- get-style-node [id]
+  (or (js/document.getElementById (str id))
+    (let [node (js/document.createElement "style")]
+      (set! (.-id node) (str id))
+      (js/document.body.appendChild node))))
+
 (defn- inject-css [id config]
-  (let [node (js/document.createElement "style")]
-    (set! (.-id node) (str id))
+  (let [node (get-style-node id)]
     (set! (.-innerHTML node) (ss/gen-css config))
-    (js/document.body.appendChild node)
     (swap! MOUNTED-STYLES assoc id {:node node :config config})))
 
 (defn mount!
