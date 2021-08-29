@@ -2,7 +2,7 @@
   (:require
     [fkcss.core :as ss]))
 
-(defonce ^:private MOUNTED-STYLES (atom {}))
+(defonce ^:private mounted-styles (atom {}))
 
 (defn- get-style-node [id]
   (or (js/document.getElementById (str id))
@@ -13,7 +13,7 @@
 (defn- inject-css [id config]
   (let [node (get-style-node id)]
     (set! (.-innerHTML node) (ss/gen-css config))
-    (swap! MOUNTED-STYLES assoc id {:node node :config config})))
+    (swap! mounted-styles assoc id {:node node :config config})))
 
 (defn mount!
   ([]
@@ -24,7 +24,7 @@
       (js/window.addEventListener "DOMContentLoaded" (partial inject-css id config)))))
 
 (defn ^:private ^:dev/after-load ^:after-load re-gen []
-  (doseq [{:keys [node config]} (vals @MOUNTED-STYLES)]
+  (doseq [{:keys [node config]} (vals @mounted-styles)]
     (set! (.-innerHTML node) (ss/gen-css config))))
 
 (defn unmount!
@@ -33,4 +33,4 @@
   ([id]
     (let [el (js/document.getElementById (str id))]
       (-> el .-parent (.removeChild el))
-      (swap! MOUNTED-STYLES dissoc id))))
+      (swap! mounted-styles dissoc id))))
