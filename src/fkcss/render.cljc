@@ -430,6 +430,7 @@
       resolve-selectors
       (filter #(and (seq (second %)) (exec-predicates (first %))))
       (group-by (comp resolved-path->queries first))
+      (sort-by #(count (first %))) ; rules with queries come after to ensure correct precedence
       (map #(wrapped-in-queries 0 (seq (first %)) (second %)))
       (str/join "\n"))))
 

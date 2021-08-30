@@ -4,7 +4,7 @@
     [fkcss.render :as ss-render]))
 
 (def EMPTY-REGISTRY {:styles {} :fonts {} :animations {}})
-(def ^:dynamic *registry* (atom EMPTY-REGISTRY))
+(defonce ^:dynamic *registry* (atom EMPTY-REGISTRY))
 
 (defn reg-style! [reg-key style]
   (swap! *registry* assoc-in [:styles reg-key] style))
