@@ -158,6 +158,18 @@ This yields.
 A single map can be given instead of the vector when only
 one `@font-face` is needed.
 
+### `reg-style!`
+Use `reg-style!` to register global styles.  Properties at the
+root of such style maps apply to all elements.  `reg-style!`
+requires a key in addition to the style map itself so it can do
+the right replacement/cleanup when namespaces are reloaded.
+```clj
+(ss/reg-style! ::global
+ {:a>
+  {:color "blue"
+   :text-decoration "none"}})
+```
+
 ### `gen-css`
 Use `gen-css` to generate CSS for all registered styles.
 ```clj
