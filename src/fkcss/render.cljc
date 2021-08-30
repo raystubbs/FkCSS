@@ -423,7 +423,7 @@
         (and acc (exec-fn)))
       true)))
 
-(defn render-style [style & {:keys [property-handlers predicates]}]
+(defn render-style [style {:keys [property-handlers predicates]}]
   (binding [*context*
             {:property-handlers (or property-handlers default-property-handlers)
              :predicates (or predicates default-predicates)
@@ -435,7 +435,7 @@
       (map #(wrapped-in-queries 0 (seq (first %)) (second %)))
       (str/join "\n"))))
 
-(defn render-font [font-spec & {:keys [property-handlers]}]
+(defn render-font [font-spec {:keys [property-handlers]}]
   (binding [*context*
             {:property-handlers (or property-handlers default-property-handlers)
              :predicates {}

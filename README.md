@@ -2,217 +2,257 @@
 
 # FkCSS
 Powerful styling without leaving Clojure/ClojureScript - f**k CSS.
+FkCSS is a minimal `CLJ->CSS` library without the weight of `CLJSS`
+and other alternatives.
 
-## The Gist
-Require FkCSS, make sure to add `:include-macros true` for ClojureScript.
+## Features
+- Styles scoped by Clojure namespace
+- Fonts and animations via `@font-face` and `@keyframes`
+- Concise syntax, but more expressive property values where desired
+- Auto-prefixing
+- Custom property handlers
+- Only a few hundred lines of code
+
+## Usage
+Most useful things are defined in `fkcss.core`, so require that in
+your module.
 ```clj
-(ns example.core
+(ns ...
   (:require
-    [fkcss.core :as ss :include-macros true]))
+    [fkcss.core :as ss]))
 ```
 
-Define classes with `defclass`.
+Styles are represented by maps of properties and nested style maps.The key determines how FkCSS interprets a value in the style map:
+- Keywords ending in `>` denote a nested tag style
+- Keywords ending in `>>` denote a nested pseudo-element style
+- Keywords ending in `?` denote conditional properties
+- Strings denote some number of whitespace delimited classes
+
+Here's an example:
 ```clj
-(ss/defclass button-style
-  {:padding {:left "1rem" :right "1rem" :top "0.5rem" :bottom "0.5rem"}
-   :background {:color "rgb(189, 193, 199)"}
-   :border {:width "1px" :style "solid" :color "rgb(119, 120, 122)"}
-   :color "rgb(119, 120, 122)"
-   
-   :test/hovered?
-   {:background-color "rgb(237, 238, 240)"}
-   
-   :test/screen-small?
-   {:font-size "16pt"}}})
+{:div>
+ {:hovered?
+  {:color "red"}
+
+  :before>>
+  {:color "blue"}
+
+  "foo bar"
+  {:color "pink"}}}
+```
+Which yields:
+```css
+div:hover {
+  color: red;
+}
+
+div::before {
+  color: blue;
+}
+
+div.foo.bar {
+  color: pink;
+}
 ```
 
-Attach it to a component.
+Use a vector for more concise nesting.
 ```clj
-(defn button [{:keys [text on-click]}]
-  [:button
-   {:class button-style :on-click on-click}
-  text])
+{[:div> :before>>]
+ {:color "blue"}}
 ```
-
-Get the CSS.
+Use a map for more concise sub-properties.
 ```clj
-(defn app []
-  [:div
-    [:style (ss/gen-css)]
-    ...])
+{:div>
+ {:margin {:left "1rem" :right "1rem"}}}
+```
+Yields:
+```css
+div {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
 ```
 
-As an alternative to manually injecting the generated CSS, in ClojureScript you
-can do.
+### `defclass`
+Use `defclass` to define namespace scoped classes, it'll bind the
+given var name to the name of the generated class.
 ```clj
-(fkcss.cljs/mount!) ; add CSS to the DOM
-(fkcss.cljs/unmount!) ; remove it when finished, unnecessary for most apps
+(ss/defclass my-class
+  {:color "red"
+
+   :hovered?
+   {:color "blue"}})
+
+(defn my-component []
+  [:div {:class my-class}
+    "Hello"])
 ```
 
-## Tests
-Tests are a concise and expressive way of using conditional styling,
-regardless of whether those conditions are implemented as media queries,
-selectors, or something else.  Instead of saying something like this
-(from CLJSS readme):
+Properties at the root of a `defclass` apply to elements with the
+defined class.  Properties in a nested node within a `defclass`
+apply to elements within an element with the defined class.
+
+### `defanimation`, `reg-animation!`
+Namespace scoped animations can be defined with `defanimation`, or
+animations with custom names can be registered with `reg-animation!`.
 ```clj
-::css/media
-{[:only :screen :and [:max-width "460px"]]
- {:height (/ height 2)}}
+(ns example-ns)
+
+(ss/defanimation example-1
+ {:from {:opacity 0}
+  :to {:opacity 1}})
+
+(ss/reg-animation! "example-2"
+ {0 {:opacity 0}
+  1 {:opacity 1}})
+
+(ss/reg-animation "example-3"
+ {"0%" {:opacity 0}
+  "100%" {:opacity 1}})
 ```
-In FkCSS we say:
+This yields.
+```css
+@keyframes example-ns-example-1 {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes example-2 {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes example-3 {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+```
+Nested nodes aren't allowed in animation property maps.
+
+### `reg-font!`
+Add fonts to the generated CSS with `reg-font!`.
 ```clj
-:test/screen-small?
-{:height (/ height 2)}
+(ss/reg-font! "Tangerine"
+  [{:src "url(angerine-Regular.ttf) format('opentype')"
+    :font-weight 400
+    :font-style "normal"}
+   {:src "url(Tangerine-Bold.ttf) format('opentype')"
+    :font-weight 700
+    :font-style "normal"}])
 ```
+This yields.
+```css
+@font-face {
+  src: url(/fonts/Tangerine-Regular.ttf) format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-family: 'Tangerine';
+}
+@font-face {
+  src: url(/fonts/Tangerine-Bold.ttf) format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-family: 'Tangerine';
+}
+```
+A single map can be given instead of the vector when only
+one `@font-face` is needed.
 
-The tests available in FkCSS by default are in `fkcss.core/DEFAULT-QUERY-TESTS`
-and `fkcss.core/DEFAULT-SELECTOR-TESTS`.  Here's what they look like:
+### `gen-css`
+Use `gen-css` to generate CSS for all registered styles.
 ```clj
-(def DEFAULT-QUERY-TESTS
-  {:screen-tiny? {:query "@media (max-width: 639px)" :priority 1}
-   :screen-small? {:query "@media (max-width: 767px)" :priority 2}
-   :screen-large? {:query "@media (min-width: 1024px)" :priority 2}
-   :screen-huge? {:query "@media (min-width: 1280px)" :priority 1}
-   :pointer-fine? {:query "@media (pointer: fine)"}
-   :pointer-coarse? {:query "@media (pointer: coarse)"}
-   :pointer-none? {:query "@media (pointer: none)"}
-   :pointer-hoverable? {:query "@media (hover: hover)"}})
-
-(def DEFAULT-SELECTOR-TESTS
-  {:hovered? ":hover"
-   :active? ":active"
-   :focused? ":focus"
-   :visibly-focused? ":focus-visible"
-   :enabled? ":enabled"
-   :disabled? ":disabled"
-   :visited? ":visited"
-   :checked? ":checked"
-   :expanded? "[aria-expanded=\"true\"]"
-   :current? "[aria-current]"})
+(def css (ss/gen-css))
 ```
-Query tests consist of the query to be applied (can be media or feature query) and
-a priority (determining the order their CSS is rendered in relative to each other).  Selector tests consist of a single selector to be added to the current style
-node's base selector.
 
-Tests are fully configurable via the config map passed to `gen-css`:
+### `fkcss.cljs/mount!`
+FkCSS can generate the CSS and add it to a `style` tag in
+the DOM in one go, if running in a browser.
+```clj
+(ns ...
+  (:require
+    [fkcss.cljs :as ss-cljs]))
+
+(ss-cljs/mount!)
+```
+Use `unmount!` to remove it.
+
+## Property Handlers
+Property handlers allow for custom translations from
+FkCSS properties to CSS properties.  FkCSS comes with
+some builtin handlers in `fkcss.render/default-property-handlers` which handle vendor prefixing and allow for some conveniences like `margin-x/margin-y` properties.  Custom handlers
+can be passed into `gen-css`, but be sure to merge
+them with the defaults if you want to keep the bultin ones.
 ```clj
 (ss/gen-css
- {:query-tests
+ {:property-handlers
   (merge
-   ss/DEFAULT-QUERY-TESTS
-   {:screen-massive? {:query "@media (min-width: 2560px)"}})
-   
-   :selector-tests
-   (merge
-    ss/DEFAULT-SELECTOR-TESTS
-    {:current? ".current"})})
+   fkcss.render/default-property-handlers
+   {...custom handlers...})})
 ```
 
-## Nested Styling
-FkCSS allows nested things to be styled via the `test`, `tag`, `class`,
-and `pseudo` keyword namespaces.
+The map of property handlers should look like this:
 ```clj
-:class/scrollbar-thin
- {:pseudo/-webkit-scrollbar
-  {:width "0.5rem"
-   :height "0.5rem"}}
+{:property-name
+ (fn [property-value]
+  {:props
+   {:property-name property-value
+    :-webkit-property-name property-value
+    :-ms-property-name property-value}})}
 ```
-More concisely, multiple levels of nesting can be expressed as a vector:
-```clj
-[:class/scrollbar-thin :pseudo/-webkit-scrollbar]
-{:width "0.5rem"
- :height "0.5rem"}
-```
+Where the `:props` map in the handlers result gives the
+final CSS properties.
 
-## Inline Animations
-FkCSS doesn't support custom `@keyframe` animations, since we aren't trying
-to recreate CSS in Clojure.  We wanna make something more concise and expressive,
-so FkCSS has inline animations.
-```clj
-(defclass some-drawer-opening
- {:animation
-  {:duration "300ms"
-   :timing-function "linear"
-   
-   :frames
-   {:from {:top -500}
-    :to {:top 0}}}})
+### Built-in Property Handlers
+- `margin-x/margin-y` shorthand
+- `padding-x/padding-y` shorthand
+- `border-<edge>-radius` shorthand (`top/right/bottom/left`)
+- `box-shadow` map value with explicit keys `#{:offset-x :offset-y :inset? :blur-radius :spread-radius}`
+- Vendor prefixes for appropriate properties
 
-(defclass some-drawer-closing
- {:animation
-  {:duration "300ms"
-   :timing-function "linear"
-   
-   :frames
-   {:from {:top 0}
-    :to {:top -500}}}})
+Example of more expressive box shadow syntax.
+```clj
+{:box-shadow {:inset? true :offset-x 0 :offset-y 2}}
 ```
 
-As a last resort, or if you just don't like the idea of inline animations, custom
-keyframe animations can be defined in plain ol' CSS via `include-css` as described
-later.
 
-## Theming
-FkCSS provides two facilities to help with theming: the `:root-selector` config and
-functional properties.
-
-The `root-selector` allows for an additional selector to be added
-at the start of each CSS rule, for example `[data-theme="dark"]`, which can then be
-added as an attribute to the document `body` (or another container) to make sure only
-things within the container are styled by the generated CSS.
-
-Functional properties are functions appearing in the place of a property value,
-which take a `theme` (given via the `:theme` config) and produce a style map.
-
-Here's how these two features work together to allow for dynamic theming.
+## Predicates
+Predicates allow for conditional rules without depending on how the test is implemented.  Predicates are keys ending in `?` within a style map.  FkCSS has builtin predicates for the most
+common cases, but custom predicates can also be given in `gen-css`.
 ```clj
-(ss/defclass button-style
- {:background-color (fn [theme] (case theme :dark "rgb(88,88,88)" :light "white"))})
-
- ; or use plain `gen-css`, but mount! is easier for front-end styling
- (ss/mount! "light-theme" {:root-selector "[data-theme=\"light\"]" :theme :light})
- (ss/mount! "dark-theme" {:root-selector "[data-theme=\"dark\"]" :theme :dark})
- ```
-
-## Raw CSS
-Though FkCSS tries to cover most styling needs without requiring raw CSS, there
-will always be edge cases, so you can import an external style sheet with
-`import-css` or add a raw chunk of CSS to what's produced via `include-css`.
-Both of these require a key so FkCSS can handle hot reloads properly.
-
-```clj
-(ss/import-css :some-external-css "/some-external-style-sheet.css")
-(ss/include-css :some-custom-css "a { text-decoration: none; }")
+(ss/gen-css
+ {:predicates
+  (merge
+   fkcss.render/default-predicates
+   {...custom predicates...})})
 ```
 
-## Class Names
-By default `defclass` produces unique class names based on the given def name,
-this is usually what you'll want since it avoids name collisions and ensures
-a unique scope for nested styles.  There may be some cases though when you'd
-like to refer to FkCSS classes in an external environment or otherwise without
-access to the Clojure def.  FkCSS has two options to make this work: `^:exact`
-and `reg-class`.
-
-Adding the `^:exact` metadata tag to any `defclass` will ensure that the CSS
-class produced has the same name as the def, so the following would produce a
-CSS class named `some-class`.
+The predicates map should look like:
 ```clj
-(ss/defclass ^:exact some-class
-  ...)
+{:predicate-key?
+ {:selector <css-selector>
+  :exec <boolean-function>
+  :query <css-query>}}
 ```
+Any predicate field can be omitted, in which case it simply won't apply.
 
-You can also manually register a style with a custom class name with `reg-class`,
-this is more verbose as FkCSS requires you to give the registration a key.
-```clj
-(ss/reg-class :some-class "some-class"
-  ...)
-```
+The `:selector` field should give a CSS selector to limit where the conditional rules will apply.  For example `:hover` or `.selected`.
 
-## Format Utility
-Any dynamic style generation is gonna rely on templating and other means of string
-generation quite heavily.  To make such code more expressive than it might be
-with `clojure.core/format`, FkCSS provides a name based templating utility `fkcss.core/format`,
-though it doesn't have any of the nice number formatting capabilities of the former.
-```clj
-(ss/format "rgb({red}, {green}, {blue})" {:red 123 :green 123 :blue 123})
-```
+The `:exec` field should give a function to be executed when
+the CSS is being generated; if the function returns `false`
+then the conditional CSS simply won't be generated.
+
+The `:query` field should give a `@media` or `@supports` query
+to predicate the rule on.
+
+### Built-in Predicates
+For CLJ and CLJS:
+`:hovered?`, `:active?` `:focused?`, `:focus-visible?`,
+`:enabled?`, `:disabled?`, `:visited?`, `:checked?`,
+`:expanded?`, `:current?`, `:screen-tiny?`, `:screen-small?`,
+`:screen-large?`, `:screen-huge?`, `:pointer-fine?`,
+`:pointer-coarse?`, `:pointer-none?`, `:hoverable?`
+
+For CLJS only: `:touchable?`
+
+See `fkcss.render/default-predicates` for how these or implemented
+and as examples for custom predicates.

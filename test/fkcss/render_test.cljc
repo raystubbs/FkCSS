@@ -32,7 +32,7 @@
     {[] {} [{:tag "div"} {:tag "button" :pseudo-el "before"}] {}}))
 
 (deftest render-style-test
-  (are [x y] (= (-> x ss-render/render-style ss-misc/reduce-whitespace) y)
+  (are [x y] (= (-> x (ss-render/render-style {}) ss-misc/reduce-whitespace) y)
     {:div> {:color "red"}}
     "div { color: red; }"
     
@@ -46,7 +46,7 @@
     "@media (hover: hover) { div { color: red; } }"))
 
 (deftest render-font-test
-  (are [x y] (= (-> x ss-render/render-font ss-misc/reduce-whitespace) y)
+  (are [x y] (= (-> x (ss-render/render-font {}) ss-misc/reduce-whitespace) y)
     [{:font-family "Test"
       :src "url(none)"}]
     "@font-face { font-family: 'Test'; src: url(none); }"))

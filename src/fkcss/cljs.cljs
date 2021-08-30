@@ -18,9 +18,9 @@
 (defn mount!
   ([]
     (mount! "fkcss-styles" {}))
-  ([id config]
+  ([id opts]
     (if (some? js/document.body)
-      (inject-css id config)
+      (inject-css id opts)
       (js/window.addEventListener "DOMContentLoaded" (partial inject-css id config)))))
 
 (defn ^:private ^:dev/after-load ^:after-load re-gen []

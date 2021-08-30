@@ -60,14 +60,17 @@
            (fkcss.core/reg-animation! animation-name# ~frames)
            animation-name#)))))
 
-(defn gen-css [& {:keys [property-handlers predicates]}]
-  (str
-    (->> @*registry* :fonts vals
-      (map #(ss-render/render-font % :property-handlers property-handlers :predicates predicates))
-      str/join)
-    (->> @*registry* :animations
-      (map #(ss-render/render-animation (key %) (val %)))
-      str/join)
-    (->> @*registry* :styles vals
-      (map #(ss-render/render-style % :property-handlers property-handlers :predicates predicates))
-      str/join)))
+(defn gen-css
+  ([]
+    (gen-css {}))
+  ([opts]
+    (str
+      (->> @*registry* :fonts vals
+        (map #(ss-render/render-font % opts))
+        str/join)
+      (->> @*registry* :animations
+        (map #(ss-render/render-animation (key %) (val %)))
+        str/join)
+      (->> @*registry* :styles vals
+        (map #(ss-render/render-style % opts))
+        str/join))))
