@@ -28,9 +28,9 @@
   ([var-name doc-string style]
     {:pre [(symbol? var-name) (map? style)]}
     `(let [full-var-name#
-           (-> (symbol (str *ns*) (name '~var-name))
+           (-> (symbol ~(str *ns*) ~(name var-name))
              (with-meta
-               (cond-> (meta '~var-name)
+               (cond-> ~(meta var-name)
                  (string? ~doc-string)
                  (assoc :doc ~doc-string))))
            
@@ -47,9 +47,9 @@
   ([var-name doc-string frames]
     {:pre [(symbol? var-name) (map? frames)]}
     `(let [full-var-name#
-           (-> (symbol (str *ns*) (name '~var-name))
+           (-> (symbol ~(str *ns*) ~(name var-name))
              (with-meta
-               (cond-> (meta '~var-name)
+               (cond-> ~(meta var-name)
                  (string? ~doc-string)
                  (assoc :doc ~doc-string))))
 

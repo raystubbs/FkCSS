@@ -8,12 +8,13 @@
   (or (js/document.getElementById (str id))
     (let [node (js/document.createElement "style")]
       (set! (.-id node) (str id))
-      (js/document.body.appendChild node))))
+      (js/document.body.prepend node)
+      node)))
 
-(defn- inject-css [id config]
+(defn- inject-css [id opts]
   (let [node (get-style-node id)]
-    (set! (.-innerHTML node) (ss/gen-css config))
-    (swap! mounted-styles assoc id {:node node :config config})))
+    (set! (.-innerHTML node) (ss/gen-css opts))
+    (swap! mounted-styles assoc id {:node node :opts opts})))
 
 (defn mount!
   ([]
@@ -21,11 +22,11 @@
   ([id opts]
     (if (some? js/document.body)
       (inject-css id opts)
-      (js/window.addEventListener "DOMContentLoaded" (partial inject-css id config)))))
+      (js/window.addEventListener "DOMContentLoaded" (partial inject-css id opts)))))
 
 (defn ^:private ^:dev/after-load ^:after-load re-gen []
-  (doseq [{:keys [node config]} (vals @mounted-styles)]
-    (set! (.-innerHTML node) (ss/gen-css config))))
+  (doseq [{:keys [node opts]} (vals @mounted-styles)]
+    (set! (.-innerHTML node) (ss/gen-css opts))))
 
 (defn unmount!
   ([]
