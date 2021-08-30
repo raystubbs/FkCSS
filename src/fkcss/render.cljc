@@ -330,9 +330,7 @@
 
     (classes-selector-key? next-selector-key)
     (let [classes (-> next-selector-key (str/split #"\s+") vec)]
-      (if (empty? resolved-path)
-        [{:classes classes}]
-        (update-last resolved-path assoc :classes classes)))
+      (conj resolved-path {:classes classes}))
 
     (predicate-selector-key? next-selector-key)
     (let [predicate (get-in *context* [:predicates next-selector-key])]
