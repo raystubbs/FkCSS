@@ -3,5 +3,10 @@
 **/.idea
 **/.cpcache
 **/.nrepl-port
+bin/
+target/
+.settings/
+.project
+.classpath
 fkcss.jar
 fkcss*.asc
