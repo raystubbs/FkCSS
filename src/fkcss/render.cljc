@@ -198,7 +198,7 @@
       {:font-family
        (cond
          (string? v)
-         (if (or (str/includes? v "'") (str/includes? v "\"") (str/includes? v ","))
+         (if (or (str/includes? v "'") (str/includes? v "\"") (str/includes? v ",") (not (re-find #"\W" v)))
            v
            (str "'" v "'"))
          
