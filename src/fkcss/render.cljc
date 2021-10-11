@@ -20,7 +20,7 @@
    :padding-x
    (fn [v]
      {:props
-      {:padding-left v :margin-right v}})
+      {:padding-left v :padding-right v}})
 
    :padding-y
    (fn [v]
