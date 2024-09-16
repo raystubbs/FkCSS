@@ -1,4 +1,10 @@
 [![Clojars Project](https://img.shields.io/clojars/v/io.fkcss/fkcss.svg)](https://clojars.org/io.fkcss/fkcss)
+> [!WARNING]
+> This project has been archived and will no longer be maintained.  There are many alternatives
+> on the market, including:
+> - [noprompt/garden](https://github.com/noprompt/garden)
+> - [green-coder/girouette](https://github.com/green-coder/girouette)
+
 
 # FkCSS
 Powerful styling without leaving Clojure/ClojureScript - f**k CSS.
